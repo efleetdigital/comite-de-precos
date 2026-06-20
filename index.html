@@ -321,7 +321,7 @@ body.light .logout-btn:hover{color:#EF4444}
   <div class="tab" onclick="goTab('comite',this)">⛽ Por Posto <span class="tcnt">538</span></div>
   <div class="tab" onclick="goTab('trans',this)" style="display:none">⛽ Transações <span class="tcnt">0</span></div>
   <div class="tab" onclick="goTab('clientes',this)">🏢 Por Cliente <span class="tcnt">64</span></div>
-  <div class="tab" onclick="goTab('hist',this)">📈 Histórico</div>
+  <div class="tab" onclick="goTab('hist',this)">📊 Painel</div>
   <div class="tab" onclick="goTab('fila',this)">🎯 Fila <span class="tcnt" id="filaTabBadge" style="background:rgba(239,68,68,.75)">—</span></div>
 </div>
 
@@ -340,7 +340,6 @@ body.light .logout-btn:hover{color:#EF4444}
       <div class="chip" id="chipSemMov" onclick="toggleSemMov(this)" title="Cidades sem transação eFleet recente">Sem movimento</div>
     </div>
   </div>
-  <div id="top10Wrap" style="margin-bottom:16px"></div>
   <div class="rcnt" id="rcntD"></div>
   <div class="tbl-wrap"><table><thead><tr>
     <th onclick="sortD('cidade')">Cidade / UF ↕</th>
@@ -411,9 +410,10 @@ body.light .logout-btn:hover{color:#EF4444}
   </div>
 </div>
 
-<!-- HISTÓRICO -->
+<!-- PAINEL -->
 <div class="panel" id="p-hist">
   <div class="kpis" id="kpiHist"></div>
+  <div id="top10Wrap" style="margin-bottom:16px"></div>
   <div class="card">
     <div class="card-title" id="histTitle">Evolução diária de cidades por status</div>
     <div class="chart-box"><canvas id="histChart"></canvas></div>
@@ -816,34 +816,6 @@ function renderDash(){
     if(typeof av==='string') return dSortAsc?av.localeCompare(bv):bv.localeCompare(av);
     return dSortAsc?av-bv:bv-av;
   });
-  // Top 10 piores (comp mais alto entre cidades com movimento)
-  var top10wrap = document.getElementById('top10Wrap');
-  if(top10wrap){
-    var piores = DASH_DATA.filter(function(d){ return d.ef!=null && d.comp!=null; })
-      .slice().sort(function(a,b){ return b.comp-a.comp; }).slice(0,10);
-    if(piores.length){
-      top10wrap.innerHTML = '<div class="card" style="padding:14px 18px">'
-        +'<div class="card-title" style="margin-bottom:10px">🔴 Top 10 — Piores diferenças vs ANP</div>'
-        +'<table style="width:100%;border-collapse:collapse;font-size:12px">'
-        +'<thead><tr>'
-        +'<th style="text-align:left;padding:6px 10px;font-family:var(--fh);font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,.35);border-bottom:1px solid rgba(255,255,255,.07)">#</th>'
-        +'<th style="text-align:left;padding:6px 10px;font-family:var(--fh);font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,.35);border-bottom:1px solid rgba(255,255,255,.07)">Cidade</th>'
-        +'<th style="text-align:right;padding:6px 10px;font-family:var(--fh);font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,.35);border-bottom:1px solid rgba(255,255,255,.07)">eFleet</th>'
-        +'<th style="text-align:right;padding:6px 10px;font-family:var(--fh);font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,.35);border-bottom:1px solid rgba(255,255,255,.07)">Ref. ANP</th>'
-        +'<th style="text-align:right;padding:6px 10px;font-family:var(--fh);font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,.35);border-bottom:1px solid rgba(255,255,255,.07)">Diferença</th>'
-        +'</tr></thead><tbody>'
-        + piores.map(function(d,i){
-          return '<tr style="border-bottom:1px solid rgba(255,255,255,.04)">'
-            +'<td style="padding:7px 10px;font-family:var(--fh);font-weight:800;color:'+(i<3?'#F87171':'rgba(255,255,255,.4)')+'">'+('0'+(i+1)).slice(-2)+'</td>'
-            +'<td style="padding:7px 10px"><span class="city">'+d.cidade+'</span> <span class="uf-tag">'+d.uf+'</span></td>'
-            +'<td style="padding:7px 10px;text-align:right;font-family:var(--fm);font-size:11px">'+R(d.ef)+'</td>'
-            +'<td style="padding:7px 10px;text-align:right;font-family:var(--fm);font-size:11px">'+R(d.anp_cid||d.anp_uf)+'</td>'
-            +'<td style="padding:7px 10px;text-align:right">'+RD(d.comp)+'</td>'
-            +'</tr>';
-        }).join('')
-        +'</tbody></table></div>';
-    } else { top10wrap.innerHTML=''; }
-  }
   document.getElementById('rcntD').textContent=data.length+' cidade'+(data.length!==1?'s':'');
   document.getElementById('bodyD').innerHTML=data.map(function(d){
     var anpRef = d.anp_cid ? R(d.anp_cid)+'<span style="font-size:9px;color:rgba(255,255,255,.3);margin-left:4px">cidade</span>' : R(d.anp_uf)+'<span style="font-size:9px;color:rgba(255,255,255,.3);margin-left:4px">UF</span>';
@@ -1252,10 +1224,40 @@ function _buildRelatorio(wasOn){
   setTimeout(function(){ win.print(); },500);
 }
 
+// ── TOP 10 ──
+function renderTop10(){
+  var wrap = document.getElementById('top10Wrap');
+  if(!wrap) return;
+  var piores = DASH_DATA.filter(function(d){ return d.ef!=null && d.comp!=null; })
+    .slice().sort(function(a,b){ return b.comp-a.comp; }).slice(0,10);
+  if(!piores.length){ wrap.innerHTML=''; return; }
+  var thStyle='text-align:left;padding:6px 10px;font-family:var(--fh);font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,.35);border-bottom:1px solid rgba(255,255,255,.07)';
+  wrap.innerHTML='<div class="card" style="padding:14px 18px;margin-bottom:16px">'
+    +'<div class="card-title" style="margin-bottom:10px">🔴 Top 10 — Cidades com maior custo vs ANP</div>'
+    +'<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr>'
+    +'<th style="'+thStyle+'">#</th>'
+    +'<th style="'+thStyle+'">Cidade</th>'
+    +'<th style="'+thStyle+';text-align:right">eFleet</th>'
+    +'<th style="'+thStyle+';text-align:right">Ref. ANP</th>'
+    +'<th style="'+thStyle+';text-align:right">Diferença</th>'
+    +'</tr></thead><tbody>'
+    +piores.map(function(d,i){
+      return '<tr style="border-bottom:1px solid rgba(255,255,255,.04)">'
+        +'<td style="padding:7px 10px;font-family:var(--fh);font-weight:800;color:'+(i<3?'#F87171':'rgba(255,255,255,.4)')+'">'+('0'+(i+1)).slice(-2)+'</td>'
+        +'<td style="padding:7px 10px"><span class="city">'+d.cidade+'</span> <span class="uf-tag">'+d.uf+'</span></td>'
+        +'<td style="padding:7px 10px;text-align:right;font-family:var(--fm);font-size:11px">'+R(d.ef)+'</td>'
+        +'<td style="padding:7px 10px;text-align:right;font-family:var(--fm);font-size:11px">'+R(d.anp_cid||d.anp_uf)+'</td>'
+        +'<td style="padding:7px 10px;text-align:right">'+RD(d.comp)+'</td>'
+        +'</tr>';
+    }).join('')
+    +'</tbody></table></div>';
+}
+
 // ── HISTÓRICO ──
 var histInited=false;
 function renderHist(){
   if(histInited) return; histInited=true;
+  renderTop10();
   if(HIST_LABELS && HIST_LABELS.length){
     var first=HIST_LABELS[0], last=HIST_LABELS[HIST_LABELS.length-1];
     var titleEl=document.getElementById('histTitle');
