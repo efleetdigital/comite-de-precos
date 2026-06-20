@@ -336,8 +336,10 @@ body.light .logout-btn:hover{color:#EF4444}
       <div class="chip cy" onclick="setDF('🟡',this)">🟡 Atenção</div>
       <div class="chip cg" onclick="setDF('🟢',this)">🟢 Bom</div>
       <div class="chip cb" onclick="setDF('🔵',this)">🔵 Excelente</div>
+      <div class="chip" id="chipSemMov" onclick="toggleSemMov(this)" title="Cidades sem transação eFleet recente">Sem movimento</div>
     </div>
   </div>
+  <div id="top10Wrap" style="margin-bottom:16px"></div>
   <div class="rcnt" id="rcntD"></div>
   <div class="tbl-wrap"><table><thead><tr>
     <th onclick="sortD('cidade')">Cidade / UF ↕</th>
@@ -412,7 +414,7 @@ body.light .logout-btn:hover{color:#EF4444}
 <div class="panel" id="p-hist">
   <div class="kpis" id="kpiHist"></div>
   <div class="card">
-    <div class="card-title">Evolução diária de cidades por status — Jan a Mai/2026</div>
+    <div class="card-title" id="histTitle">Evolução diária de cidades por status</div>
     <div class="chart-box"><canvas id="histChart"></canvas></div>
   </div>
 </div>
@@ -565,8 +567,9 @@ document.addEventListener('keydown', function(e) {
 // ── SUPABASE CONFIG ──
 const SB_URL='https://qeseyfuilmxghukuqumi.supabase.co';
 const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFlc2V5ZnVpbG14Z2h1a3VxdW1pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxODc0MjksImV4cCI6MjA5MTc2MzQyOX0.nH77_Lzt-fM70FyiESjQrUVmkOtB43vqahjq52KJ9W8';
-let DASH_DATA=[], COMITE_DATA=[], TRANS_DATA=[], CLIENTES_DATA=[];
+let DASH_DATA=[], COMITE_DATA=[], TRANS_DATA=[], CLIENTES_DATA=[], BRUTAS_DATA=[];
 let HIST_LABELS=[], HIST_V=[], HIST_A=[], HIST_G=[], HIST_B=[];
+let ANP_META={semana_ref:null, atualizado:false};
 
 async function sbFetch(table, params) {
   var url = SB_URL+'/rest/v1/'+table+'?'+params;
@@ -575,18 +578,26 @@ async function sbFetch(table, params) {
   return r.json();
 }
 
-function buildDashData(anpRows, negRows) {
-  // Build map of city -> latest negotiated price
-  var latestByCity = {};
+function buildDashData(anpRows, negRows, brutasRows) {
+  // Build map of city -> latest negotiated price (CONCLUIDO)
+  var latestNeg = {};
   negRows.filter(n=>n.status==='CONCLUIDO' && n.preco_negociado).forEach(function(n){
-    var k = n.cidade+'|'+n.uf;
-    if(!latestByCity[k] || n.data > latestByCity[k].data) latestByCity[k]=n;
+    var k = (n.cidade||'').toUpperCase()+'|'+(n.uf||'').toUpperCase();
+    if(!latestNeg[k] || n.data > latestNeg[k].data) latestNeg[k]=n;
+  });
+  // Build map of city -> latest practiced price (transacoes_brutas / CSV)
+  var latestPrat = {};
+  (brutasRows||[]).filter(b=>b.preco_praticado).forEach(function(b){
+    var k = (b.cidade||'').toUpperCase()+'|'+(b.uf||'').toUpperCase();
+    if(!latestPrat[k] || b.data > latestPrat[k].data) latestPrat[k]=b;
   });
   return anpRows.map(function(a){
-    var k=a.cidade+'|'+a.uf;
-    var ef = latestByCity[k] ? latestByCity[k].preco_negociado : null;
+    var k=(a.cidade||'').toUpperCase()+'|'+(a.uf||'').toUpperCase();
+    var neg = latestNeg[k] ? Number(latestNeg[k].preco_negociado) : null;
+    var prat = latestPrat[k] ? Number(latestPrat[k].preco_praticado) : null;
+    var ef = neg!=null ? neg : prat;
     var ref=a.preco_ref;
-    var comp = (ef && ref) ? parseFloat((ef-ref).toFixed(3)) : null;
+    var comp = (ef!=null && ref!=null) ? parseFloat((ef-ref).toFixed(3)) : null;
     var st='🟡';
     if(comp!==null){
       if(comp>0.10) st='🔴';
@@ -594,7 +605,13 @@ function buildDashData(anpRows, negRows) {
       else if(comp>-0.20) st='🟢';
       else st='🔵';
     }
-    return {cidade:a.cidade,uf:a.uf,ef:ef,anp_cid:a.preco_cid,anp_uf:a.preco_uf,ref:ref,comp:comp,st:st};
+    return {
+      cidade:a.cidade, uf:a.uf, ef:ef,
+      ef_neg:neg, ef_prat:prat,
+      anp_cid:a.preco_cid, anp_uf:a.preco_uf, ref:ref,
+      comp:comp, st:st,
+      ultima_data: (latestPrat[k]?latestPrat[k].data:null) || (latestNeg[k]?latestNeg[k].data:null)
+    };
   });
 }
 
@@ -606,13 +623,15 @@ function buildComiteData(rows) {
       id:r.id||null, data:d, posto:r.posto||'', cidade:r.cidade||'', uf:r.uf||'', produto:r.produto||'S10',
       cliente:r.cliente||'', prat:r.preco_praticado, anp:r.preco_anp,
       comp:r.comparativo, neg:r.preco_negociado, eco:r.economia,
-      st:r.status||'', resp:r.responsavel||'', tel:r.tel||'', obs:r.obs||''
+      st:r.status||'', resp:r.responsavel||'', tel:r.tel||'', obs:r.obs||'',
+      em_fila: r.em_fila===true
     };
   });
 }
 
-function buildClientesData(comite) {
+function buildClientesData(comite, brutas) {
   var map={};
+  // 1) Negociações do comitê — fonte primária
   comite.forEach(function(c){
     if(!c.cliente) return;
     if(!map[c.cliente]) map[c.cliente]={nome:c.cliente,lit:0,val:0,ntx:0,criticos:0,postos:[]};
@@ -620,7 +639,40 @@ function buildClientesData(comite) {
     m.ntx++;
     if(c.st==='CONCLUIDO' && c.eco!=null && c.eco<-0.30) m.criticos++;
     var found=m.postos.find(function(p){return p.posto===c.posto && p.cidade===c.cidade;});
-    if(!found){m.postos.push({posto:c.posto,cidade:c.cidade,uf:c.uf,neg:c.neg,st:compToPostoSt(c.comp),resp:c.resp,prat:c.prat,anp:c.anp,comp:c.comp})}
+    if(!found){
+      m.postos.push({
+        posto:c.posto, cidade:c.cidade, uf:c.uf,
+        neg:c.neg, st:compToPostoSt(c.comp), resp:c.resp,
+        prat:c.prat, anp:c.anp, comp:c.comp,
+        ultima_data:c.data, fonte:'comite'
+      });
+    }
+  });
+  // 2) Transações brutas (CSV) — atualiza preço praticado e adiciona postos novos
+  (brutas||[]).forEach(function(b){
+    if(!b.cliente) return;
+    if(!map[b.cliente]) map[b.cliente]={nome:b.cliente,lit:0,val:0,ntx:0,criticos:0,postos:[]};
+    var m=map[b.cliente];
+    m.lit += Number(b.quantidade)||0;
+    m.val += Number(b.valor)||0;
+    var found=m.postos.find(function(p){return p.posto===b.posto && p.cidade===b.cidade;});
+    var prat=b.preco_praticado!=null?Number(b.preco_praticado):null;
+    var anp=b.preco_anp!=null?Number(b.preco_anp):null;
+    var comp=b.comparativo!=null?Number(b.comparativo):(prat!=null&&anp!=null?parseFloat((prat-anp).toFixed(3)):null);
+    if(!found){
+      m.postos.push({
+        posto:b.posto, cidade:b.cidade, uf:b.uf,
+        neg:null, st:compToPostoSt(comp), resp:null,
+        prat:prat, anp:anp, comp:comp,
+        ultima_data:b.data, fonte:'csv'
+      });
+    } else if(!found.ultima_data || b.data >= found.ultima_data){
+      found.prat = prat!=null?prat:found.prat;
+      found.anp  = anp!=null?anp:found.anp;
+      found.comp = comp!=null?comp:found.comp;
+      if(comp!=null) found.st = compToPostoSt(comp);
+      found.ultima_data = b.data;
+    }
   });
   return Object.values(map).sort(function(a,b){return a.nome.localeCompare(b.nome);});
 }
@@ -630,15 +682,42 @@ async function loadSupabase() {
   var sbErr  = document.getElementById('sb-error');
   if(sbLoad) sbLoad.style.display='flex';
   try {
-    var [anpRows, negRows, histRows] = await Promise.all([
+    var [anpRows, negRows, histRows, brutasRows] = await Promise.all([
       sbFetch('anp_referencia','select=*&order=cidade'),
       sbFetch('comite_negociacoes','select=*&order=data'),
-      sbFetch('comite_historico','select=*&order=data')
+      sbFetch('comite_historico','select=*&order=data'),
+      sbFetch('transacoes_brutas','select=*&order=data.desc')
     ]);
-    DASH_DATA   = buildDashData(anpRows, negRows);
+    if(anpRows && anpRows.length){
+      var lastSem = anpRows.map(function(a){ return a.semana_ref||''; }).sort().pop();
+      ANP_META.semana_ref = lastSem;
+      try {
+        var dRef = new Date(lastSem);
+        ANP_META.atualizado = (Date.now() - dRef.getTime()) < (14*24*3600*1000);
+      } catch(_) { ANP_META.atualizado=false; }
+    }
+    DASH_DATA   = buildDashData(anpRows, negRows, brutasRows);
     COMITE_DATA = buildComiteData(negRows);
-    TRANS_DATA  = [];
-    CLIENTES_DATA = buildClientesData(COMITE_DATA);
+    BRUTAS_DATA = (brutasRows||[]).map(function(b){
+      var d=b.data?b.data.substring(0,10):'';
+      var dBr=d?d.split('-').reverse().join('/'):'';
+      return {
+        id:b.id, data:b.data, dt:dBr,
+        posto:b.posto||'', cidade:b.cidade||'', uf:b.uf||'',
+        cliente:b.cliente||'', produto:b.produto||'S10',
+        prat:b.preco_praticado!=null?Number(b.preco_praticado):null,
+        anp:b.preco_anp!=null?Number(b.preco_anp):null,
+        comp:b.comparativo!=null?Number(b.comparativo):null,
+        val:Number(b.valor)||0, lit:Number(b.quantidade)||0,
+        pu:b.preco_praticado!=null?Number(b.preco_praticado):0,
+        st_cidade:null
+      };
+    });
+    var cityStMap={};
+    DASH_DATA.forEach(function(d){ cityStMap[(d.cidade||'').toUpperCase()+'|'+(d.uf||'').toUpperCase()]=d.st; });
+    BRUTAS_DATA.forEach(function(b){ b.st_cidade = cityStMap[(b.cidade||'').toUpperCase()+'|'+(b.uf||'').toUpperCase()]||null; });
+    TRANS_DATA  = BRUTAS_DATA;
+    CLIENTES_DATA = buildClientesData(COMITE_DATA, brutasRows);
     HIST_LABELS = histRows.map(function(h){return h.label;});
     HIST_V = histRows.map(function(h){return h.total;});
     HIST_A = histRows.map(function(h){return h.a_negociar;});
@@ -653,7 +732,7 @@ async function loadSupabase() {
 }
 
 // ── GLOBALS ──
-var dFil='', dSort='comp', dSortAsc=false;
+var dFil='', dSort='comp', dSortAsc=false, dShowSemMov=false;
 var curCliente=null;
 
 // ── UTILS ──
@@ -661,11 +740,12 @@ function R(v){ return v!=null ? 'R$ '+v.toFixed(3) : '—'; }
 function RD(v){
   if(v==null) return '—';
   var a=Math.abs(v).toFixed(3);
-  return v>=0 ? '<span class="pv">+R$ '+a+'</span>' : '<span class="nv">−R$ '+a+'</span>';
+  // negativo = eFleet abaixo do ANP = bom (verde); positivo = acima = ruim (vermelho)
+  return v>=0 ? '<span class="nv">+R$ '+a+'</span>' : '<span class="pv">−R$ '+a+'</span>';
 }
 function PCT(v){
   if(v==null) return '—';
-  return v>=0 ? '<span class="pv">+'+v.toFixed(2)+'%</span>' : '<span class="nv">'+v.toFixed(2)+'%</span>';
+  return v>=0 ? '<span class="nv">+'+v.toFixed(2)+'%</span>' : '<span class="pv">'+v.toFixed(2)+'%</span>';
 }
 function compToPostoSt(comp){
   if(comp==null) return null;
@@ -695,6 +775,7 @@ function goTab(id, btn){
   if(id==='hist') renderHist();
   if(id==='fila') renderFila();
 }
+function toggleSemMov(el){ dShowSemMov=!dShowSemMov; el.classList.toggle('on',dShowSemMov); renderDash(); }
 function setDF(f, el){
   dFil=f;
   document.querySelectorAll('#p-dash .chip').forEach(function(c){ c.classList.remove('on'); });
@@ -726,6 +807,7 @@ function renderDash(){
   var q=(document.getElementById('srchD').value||'').toLowerCase();
   var uf=document.getElementById('ufSelD').value;
   var data=DASH_DATA.filter(function(d){
+    if(!dShowSemMov && d.ef==null) return false;
     return (!dFil||d.st===dFil)&&(!uf||d.uf===uf)&&(!q||d.cidade.toLowerCase().includes(q)||d.uf.toLowerCase().includes(q));
   });
   data.sort(function(a,b){
@@ -733,6 +815,34 @@ function renderDash(){
     if(typeof av==='string') return dSortAsc?av.localeCompare(bv):bv.localeCompare(av);
     return dSortAsc?av-bv:bv-av;
   });
+  // Top 10 piores (comp mais alto entre cidades com movimento)
+  var top10wrap = document.getElementById('top10Wrap');
+  if(top10wrap){
+    var piores = DASH_DATA.filter(function(d){ return d.ef!=null && d.comp!=null; })
+      .slice().sort(function(a,b){ return b.comp-a.comp; }).slice(0,10);
+    if(piores.length){
+      top10wrap.innerHTML = '<div class="card" style="padding:14px 18px">'
+        +'<div class="card-title" style="margin-bottom:10px">🔴 Top 10 — Piores diferenças vs ANP</div>'
+        +'<table style="width:100%;border-collapse:collapse;font-size:12px">'
+        +'<thead><tr>'
+        +'<th style="text-align:left;padding:6px 10px;font-family:var(--fh);font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,.35);border-bottom:1px solid rgba(255,255,255,.07)">#</th>'
+        +'<th style="text-align:left;padding:6px 10px;font-family:var(--fh);font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,.35);border-bottom:1px solid rgba(255,255,255,.07)">Cidade</th>'
+        +'<th style="text-align:right;padding:6px 10px;font-family:var(--fh);font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,.35);border-bottom:1px solid rgba(255,255,255,.07)">eFleet</th>'
+        +'<th style="text-align:right;padding:6px 10px;font-family:var(--fh);font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,.35);border-bottom:1px solid rgba(255,255,255,.07)">Ref. ANP</th>'
+        +'<th style="text-align:right;padding:6px 10px;font-family:var(--fh);font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,.35);border-bottom:1px solid rgba(255,255,255,.07)">Diferença</th>'
+        +'</tr></thead><tbody>'
+        + piores.map(function(d,i){
+          return '<tr style="border-bottom:1px solid rgba(255,255,255,.04)">'
+            +'<td style="padding:7px 10px;font-family:var(--fh);font-weight:800;color:'+(i<3?'#F87171':'rgba(255,255,255,.4)')+'">'+('0'+(i+1)).slice(-2)+'</td>'
+            +'<td style="padding:7px 10px"><span class="city">'+d.cidade+'</span> <span class="uf-tag">'+d.uf+'</span></td>'
+            +'<td style="padding:7px 10px;text-align:right;font-family:var(--fm);font-size:11px">'+R(d.ef)+'</td>'
+            +'<td style="padding:7px 10px;text-align:right;font-family:var(--fm);font-size:11px">'+R(d.anp_cid||d.anp_uf)+'</td>'
+            +'<td style="padding:7px 10px;text-align:right">'+RD(d.comp)+'</td>'
+            +'</tr>';
+        }).join('')
+        +'</tbody></table></div>';
+    } else { top10wrap.innerHTML=''; }
+  }
   document.getElementById('rcntD').textContent=data.length+' cidade'+(data.length!==1?'s':'');
   document.getElementById('bodyD').innerHTML=data.map(function(d){
     var anpRef = d.anp_cid ? R(d.anp_cid)+'<span style="font-size:9px;color:rgba(255,255,255,.3);margin-left:4px">cidade</span>' : R(d.anp_uf)+'<span style="font-size:9px;color:rgba(255,255,255,.3);margin-left:4px">UF</span>';
@@ -1145,6 +1255,11 @@ function _buildRelatorio(wasOn){
 var histInited=false;
 function renderHist(){
   if(histInited) return; histInited=true;
+  if(HIST_LABELS && HIST_LABELS.length){
+    var first=HIST_LABELS[0], last=HIST_LABELS[HIST_LABELS.length-1];
+    var titleEl=document.getElementById('histTitle');
+    if(titleEl) titleEl.textContent='Evolução diária de cidades por status — '+first+' a '+last;
+  }
   var lastV=HIST_V.filter(function(v){ return v!=null; }).slice(-1)[0]||0;
   var lastA=HIST_A.filter(function(v){ return v!=null; }).slice(-1)[0]||0;
   var lastG=HIST_G.filter(function(v){ return v!=null; }).slice(-1)[0]||0;
@@ -1190,49 +1305,105 @@ function goToFila(searchTerm) {
     if(searchTerm){ var s=document.getElementById('srchF'); if(s){s.value=searchTerm;renderFila();} }
   },50);
 }
+// PATCH em_fila no Supabase
+async function sbSaveEmFila(id, value){
+  if(!id) return;
+  await fetch(SB_URL+'/rest/v1/comite_negociacoes?id=eq.'+id, {
+    method:'PATCH',
+    headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+    body:JSON.stringify({em_fila: !!value})
+  });
+}
+
+// Cria registro novo em comite_negociacoes (vindo de transacoes_brutas ou painel cidade)
+async function sbCreateNegociacaoFromBruta(posto, cidade, uf, cliente, prat, anp, comp){
+  var body = {
+    data: new Date().toISOString().substring(0,10),
+    posto: posto, cidade: cidade, uf: uf, cliente: cliente, produto:'S10',
+    preco_praticado: prat, preco_anp: anp, comparativo: comp,
+    status: 'PENDENTE', em_fila: true
+  };
+  var r = await fetch(SB_URL+'/rest/v1/comite_negociacoes', {
+    method:'POST',
+    headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},
+    body:JSON.stringify(body)
+  });
+  var rows = await r.json();
+  return rows && rows[0] ? rows[0] : null;
+}
+
+async function reloadAndRender(){
+  await loadSupabase();
+  initDash(); initComite(); initTrans(); initClientes(); initFila();
+}
+
 function addToFila(idx) {
-  var ed=getEdit(idx); var st=ed?ed.st:COMITE_DATA[idx].st;
-  if(st!=='CONCLUIDO'&&st!=='NEGADO'&&st!=='EM ANDAMENTO') quickAction(idx,'EM ANDAMENTO');
+  var c = COMITE_DATA[idx]; if(!c) return;
+  c.em_fila = true;
+  sbSaveEmFila(c.id, true);
+  renderFila(); renderComite();
   goToFila('');
 }
+
+function removeFromFila(idx) {
+  var c = COMITE_DATA[idx]; if(!c) return;
+  c.em_fila = false;
+  sbSaveEmFila(c.id, false);
+  renderFila(); renderComite();
+}
+
 function addCidadeToFila(cidade, uf) {
-  COMITE_DATA.forEach(function(c,i){
-    if(c.cidade===cidade&&c.uf===uf){
-      var ed=getEdit(i); var st=ed?ed.st:c.st;
-      if(st!=='CONCLUIDO'&&st!=='NEGADO'&&st!=='EM ANDAMENTO'){
-        var ex=getEdit(i)||{};
-        EDITS[i]={st:'EM ANDAMENTO',comment:ex.comment||'',at:new Date().toLocaleDateString('pt-BR')};
-        COMITE_DATA[i].st='EM ANDAMENTO';
-        sbSaveStatus(i,'EM ANDAMENTO',ex.comment||'');
-      }
+  var marcados = 0;
+  COMITE_DATA.forEach(function(c){
+    if(c.cidade===cidade && c.uf===uf && !c.em_fila
+       && c.st!=='CONCLUIDO' && c.st!=='NEGADO'){
+      c.em_fila = true;
+      sbSaveEmFila(c.id, true);
+      marcados++;
     }
   });
+  if(!marcados){
+    var d = DASH_DATA.find(function(x){ return x.cidade===cidade && x.uf===uf; });
+    if(d){
+      sbCreateNegociacaoFromBruta('—', cidade, uf, '—', d.ef_prat||d.ef, d.ref, d.comp)
+        .then(function(row){ if(row) reloadAndRender(); });
+      return;
+    }
+  }
   renderFila(); renderComite(); goToFila(cidade);
 }
+
 function addPostoToFila(cliIdx, postoIdx) {
-  var p=CLIENTES_DATA[cliIdx].postos[postoIdx];
-  COMITE_DATA.forEach(function(c,i){
-    if(c.posto===p.posto&&c.cidade===p.cidade){
-      var ed=getEdit(i); var st=ed?ed.st:c.st;
-      if(st!=='CONCLUIDO'&&st!=='NEGADO'&&st!=='EM ANDAMENTO'){
-        var ex=getEdit(i)||{};
-        EDITS[i]={st:'EM ANDAMENTO',comment:ex.comment||'',at:new Date().toLocaleDateString('pt-BR')};
-        COMITE_DATA[i].st='EM ANDAMENTO';
-        sbSaveStatus(i,'EM ANDAMENTO',ex.comment||'');
-      }
+  var p = CLIENTES_DATA[cliIdx].postos[postoIdx];
+  var cliente = CLIENTES_DATA[cliIdx].nome;
+  var marcados = 0;
+  COMITE_DATA.forEach(function(c){
+    if(c.posto===p.posto && c.cidade===p.cidade && c.cliente===cliente && !c.em_fila
+       && c.st!=='CONCLUIDO' && c.st!=='NEGADO'){
+      c.em_fila = true;
+      sbSaveEmFila(c.id, true);
+      marcados++;
     }
   });
-  renderFila(); renderComite(); goToFila(p.posto);
+  if(!marcados){
+    sbCreateNegociacaoFromBruta(p.posto, p.cidade, p.uf, cliente, p.prat, p.anp, p.comp)
+      .then(function(row){ if(row) reloadAndRender(); });
+  } else {
+    renderFila(); renderComite();
+  }
+  goToFila(p.posto);
 }
 
 // ── SUPABASE SAVE ──
 async function sbSaveStatus(idx, newSt, newObs) {
   var c = COMITE_DATA[idx];
   if (!c || !c.id) return;
+  var body = {status:newSt, obs:newObs||c.obs||''};
+  if(newSt==='CONCLUIDO' || newSt==='NEGADO') body.em_fila = false;
   await fetch(SB_URL+'/rest/v1/comite_negociacoes?id=eq.'+c.id, {
     method:'PATCH',
     headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
-    body:JSON.stringify({status:newSt, obs:newObs||c.obs||''})
+    body:JSON.stringify(body)
   });
 }
 
@@ -1241,6 +1412,7 @@ function quickAction(idx, newSt) {
   var at=new Date().toLocaleDateString('pt-BR');
   EDITS[idx]={st:newSt,comment:existing.comment||'',at:at};
   COMITE_DATA[idx].st=newSt;
+  if(newSt==='CONCLUIDO' || newSt==='NEGADO') COMITE_DATA[idx].em_fila = false;
   sbSaveStatus(idx,newSt,existing.comment||'');
   renderFila(); renderComite();
 }
@@ -1258,9 +1430,9 @@ function calcPri(i) {
 
 // ── FILA ──
 var filaFilter = 'aberto';
+var filaShowDone = false;
 
-var filaFilter = 'aberto';
-
+function filaToggleDone() { filaShowDone = !filaShowDone; renderFila(); }
 function filaSetFilter(f, el) {
   filaFilter = f;
   document.querySelectorAll('.fila-toolbar .chip').forEach(function(c){ c.classList.remove('on'); });
@@ -1276,13 +1448,15 @@ function renderFila() {
   var kpi  = document.getElementById('kpiFila');
   if(!grid) return;
 
-  // build scored list
-  var allItems = COMITE_DATA.map(function(c,i){
-    var ed = getEdit(i); var st = ed ? ed.st : c.st;
-    return {i:i, c:c, st:st, pri:calcPri(i)};
-  });
+  // build scored list — apenas itens marcados como em_fila pelo analista
+  var allItems = COMITE_DATA
+    .map(function(c,i){
+      var ed = getEdit(i); var st = ed ? ed.st : c.st;
+      return {i:i, c:c, st:st, pri:calcPri(i)};
+    })
+    .filter(function(x){ return x.c.em_fila === true; });
 
-  // separate active vs done
+  // separate active vs done dentro da fila
   var doneItems   = allItems.filter(function(x){ return x.st==='CONCLUIDO'||x.st==='NEGADO'; });
   var activeItems = allItems.filter(function(x){ return x.st!=='CONCLUIDO'&&x.st!=='NEGADO'; });
 
@@ -1324,10 +1498,20 @@ function renderFila() {
   var badge = document.getElementById('filaTabBadge');
   if(badge) badge.textContent = total>0 ? total : '—';
 
-  if(cnt) cnt.textContent = filteredActive.length+' item'+(filteredActive.length!==1?'s':'')+' em aberto'+(doneItems.length?' · '+doneItems.length+' registrado'+(doneItems.length!==1?'s':''):'');
+  if(cnt) cnt.innerHTML = filteredActive.length+' item'+(filteredActive.length!==1?'s':'')+' em aberto'
+    +(doneItems.length?' · <button onclick="filaToggleDone()" style="background:none;border:none;color:rgba(255,255,255,.35);cursor:pointer;font-family:var(--fh);font-weight:700;font-size:11px;padding:0;text-decoration:underline;">'+(filaShowDone?'Ocultar':'Mostrar')+' '+doneItems.length+' registrado'+(doneItems.length!==1?'s':'')+'</button>':'');
 
   if(!filteredActive.length && !doneItems.length){
-    grid.innerHTML='<div style="text-align:center;padding:48px;color:rgba(255,255,255,.3);font-size:14px">Nenhum item encontrado</div>';
+    var anpAviso = ANP_META.atualizado === false
+      ? '<div style="margin-top:14px;font-size:11px;color:var(--yel);opacity:.7">⚠️ Comparativo ANP usando última referência ('+ (ANP_META.semana_ref||'sem data') +'). Atualize <code>anp_referencia</code> para refletir a semana atual.</div>'
+      : '';
+    grid.innerHTML='<div style="text-align:center;padding:48px;color:rgba(255,255,255,.4);font-size:14px;line-height:1.6">'
+      + '<div style="font-size:32px;margin-bottom:10px">🎯</div>'
+      + '<div style="font-family:var(--fh);font-weight:700;font-size:14px;color:rgba(255,255,255,.7)">Fila vazia</div>'
+      + '<div style="font-size:12px;margin-top:6px;max-width:480px;margin-left:auto;margin-right:auto">'
+      + 'A fila agora só recebe itens que você marcar manualmente. Vá em <strong>Por Cidade</strong>, <strong>Por Posto</strong> ou <strong>Por Cliente</strong> e use o botão <span style="color:var(--teal)">➕ Fila</span> para incluir o que precisa ser negociado.'
+      + '</div>' + anpAviso
+      + '</div>';
     return;
   }
 
@@ -1360,6 +1544,7 @@ function renderFila() {
       html+='<button class="fila-add-btn" onclick="quickAction('+x.i+',\'AGUARDANDO RETORNO\')" style="background:rgba(245,184,0,.09);border-color:rgba(245,184,0,.25)">⏳ Aguardar</button>';
       html+='<button class="fila-add-btn" onclick="quickAction('+x.i+',\'CONCLUIDO\')" style="background:rgba(164,197,87,.09);border-color:rgba(164,197,87,.25)">✅ Concluir</button>';
       html+='<button class="fila-add-btn" onclick="quickAction('+x.i+',\'NEGADO\')" style="background:rgba(239,68,68,.09);border-color:rgba(239,68,68,.25)">❌ Negar</button>';
+      html+='<button class="fila-add-btn" onclick="removeFromFila('+x.i+')" style="background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.15);color:rgba(255,255,255,.5)" title="Tirar da fila sem mudar status">↩️ Tirar da fila</button>';
       html+='</div>';
     }
     html+='</div>';
@@ -1370,8 +1555,8 @@ function renderFila() {
 
   var out = filteredActive.map(buildCard).join('');
 
-  // Registros section (concluídos / negados)
-  if(doneItems.length){
+  // Registros section (concluídos / negados) — ocultos por padrão
+  if(doneItems.length && filaShowDone){
     out += '<div style="margin:24px 0 10px;display:flex;align-items:center;gap:10px">'
          + '<div style="flex:1;height:1px;background:rgba(255,255,255,.08)"></div>'
          + '<span style="font-family:var(--fh);font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.25)">Registros ('+doneItems.length+')</span>'
@@ -1387,10 +1572,12 @@ function renderFila() {
 async function sbSaveStatus(idx, newSt, newObs) {
   var c = COMITE_DATA[idx];
   if (!c || !c.id) return;
+  var body = {status:newSt, obs:newObs||c.obs||''};
+  if(newSt==='CONCLUIDO' || newSt==='NEGADO') body.em_fila = false;
   await fetch(SB_URL+'/rest/v1/comite_negociacoes?id=eq.'+c.id, {
     method:'PATCH',
     headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
-    body:JSON.stringify({status:newSt, obs:newObs||c.obs||''})
+    body:JSON.stringify(body)
   });
 }
 
@@ -1399,6 +1586,7 @@ function quickAction(idx, newSt) {
   var at=new Date().toLocaleDateString('pt-BR');
   EDITS[idx]={st:newSt,comment:existing.comment||'',at:at};
   COMITE_DATA[idx].st=newSt;
+  if(newSt==='CONCLUIDO' || newSt==='NEGADO') COMITE_DATA[idx].em_fila = false;
   sbSaveStatus(idx,newSt,existing.comment||'');
   renderFila(); renderComite();
 }
