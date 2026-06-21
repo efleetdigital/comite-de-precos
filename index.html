@@ -630,6 +630,13 @@ async function sbFetch(table, params) {
 }
 
 function buildDashData(anpRows, negRows, brutasRows) {
+  // Dedup anpRows por (cidade, uf) — mantém só a semana mais recente (já vem ordenado por semana_ref.desc)
+  var anpSeen = {}, anpDedup = [];
+  (anpRows||[]).forEach(function(a){
+    var k=(a.cidade||'').toUpperCase()+'|'+(a.uf||'').toUpperCase();
+    if(!anpSeen[k]){ anpSeen[k]=true; anpDedup.push(a); }
+  });
+  anpRows = anpDedup;
   // Build map of city -> latest negotiated price (CONCLUIDO)
   var latestNeg = {};
   negRows.filter(n=>n.status==='CONCLUIDO' && n.preco_negociado).forEach(function(n){
@@ -734,7 +741,7 @@ async function loadSupabase() {
   if(sbLoad) sbLoad.style.display='flex';
   try {
     var [anpRows, negRows, histRows, brutasRows] = await Promise.all([
-      sbFetch('anp_referencia','select=*&order=cidade'),
+      sbFetch('anp_referencia','select=*&order=semana_ref.desc,cidade'),
       sbFetch('comite_negociacoes','select=*&order=data'),
       sbFetch('comite_historico','select=*&order=data'),
       sbFetch('transacoes_brutas','select=*&order=data.desc')
