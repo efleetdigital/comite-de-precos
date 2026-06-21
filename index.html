@@ -1124,6 +1124,9 @@ function renderPostos(){
   var c=CLIENTES_DATA[curCliente];
   var srch=document.getElementById('srchPosto');
   var q=srch?(srch.value||'').toLowerCase():'';
+  // Mapa cidade|uf → ref ANP da anp_referencia
+  var anpMap={};
+  DASH_DATA.forEach(function(d){ anpMap[(d.cidade||'').toUpperCase()+'|'+(d.uf||'').toUpperCase()]=d; });
   var list=c.postos.filter(function(p){
     if(postoFilter!=='all' && p.st!==POS_ST_MAP[postoFilter]) return false;
     if(q && ![p.posto,p.cidade,p.uf].join(' ').toLowerCase().includes(q)) return false;
@@ -1135,21 +1138,24 @@ function renderPostos(){
     return;
   }
   wrap.innerHTML='<div class="tbl-wrap"><table><thead><tr>'+
-    '<th>Posto / Rede</th><th>Cidade</th><th>UF</th><th>Praticado</th><th>Negociado</th><th>Ref. ANP</th><th>Comp.</th><th>Status</th><th>Status Cidade</th><th style="width:80px"></th>'+
+    '<th>Posto / Rede</th><th>Cidade</th><th>UF</th><th style="text-align:right">Praticado</th><th style="text-align:right">Negociado</th><th style="text-align:right">Ref. ANP cidade</th><th style="text-align:right">Diferença</th><th>Status</th><th style="width:80px"></th>'+
   '</tr></thead><tbody>'+
   list.map(function(p){
     var realIdx=c.postos.indexOf(p);
-    var comp=p.comp!=null?RD(p.comp):'—';
+    var dash=anpMap[(p.cidade||'').toUpperCase()+'|'+(p.uf||'').toUpperCase()];
+    var anpRef=dash?(dash.anp_cid||dash.ref):null;
+    var prat=p.prat!=null?p.prat:null;
+    var comp=anpRef!=null&&prat!=null?parseFloat((prat-anpRef).toFixed(3)):null;
+    var st=comp!=null?compToPostoSt(comp):p.st;
     return '<tr class="posto-row" onclick="openPostoDetail('+curCliente+','+realIdx+')">'+
       '<td><div class="tr-name">'+p.posto+'</div></td>'+
       '<td>'+p.cidade+'</td>'+
       '<td><span class="uf-tag">'+p.uf+'</span></td>'+
-      '<td><span class="mono" style="font-weight:700">'+(p.prat!=null?R(p.prat):'—')+'</span></td>'+
-      '<td>'+(p.neg!=null?'<span class="mono" style="color:var(--g400);font-weight:700">'+R(p.neg)+'</span>':'<span style="opacity:.25">—</span>')+'</td>'+
-      '<td><span class="mono" style="color:rgba(255,255,255,.5)">'+(p.anp!=null?R(p.anp):'—')+'</span></td>'+
-      '<td>'+comp+'</td>'+
-      '<td>'+stPill(p.st)+'</td>'+
-      '<td>'+stPill(getCityStatus(p.cidade,p.uf))+'</td>'+
+      '<td style="text-align:right"><span class="mono" style="font-weight:700">'+(prat!=null?R(prat):'—')+'</span></td>'+
+      '<td style="text-align:right">'+(p.neg!=null?'<span class="mono" style="color:var(--g400);font-weight:700">'+R(p.neg)+'</span>':'<span style="opacity:.25">—</span>')+'</td>'+
+      '<td style="text-align:right"><span class="mono" style="opacity:.6">'+(anpRef!=null?R(anpRef):'—')+'</span></td>'+
+      '<td style="text-align:right">'+(comp!=null?RD(comp):'<span style="opacity:.25">—</span>')+'</td>'+
+      '<td>'+stPill(st)+'</td>'+
       '<td><button class="fila-add-btn" onclick="event.stopPropagation();addPostoToFila('+curCliente+','+realIdx+')" title="Adicionar à Fila">➕ Fila</button></td>'+
     '</tr>';
   }).join('')+
