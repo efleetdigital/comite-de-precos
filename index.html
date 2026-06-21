@@ -237,6 +237,13 @@ body.light .hist-item{background:#fff;border-color:rgba(0,0,0,.08);box-shadow:0 
 body.light .hist-item-name{color:#0D1A33}
 body.light .hist-item-sub{color:rgba(0,0,0,.45)}
 body.light .hist-item-date{color:rgba(0,0,0,.3)}
+.top10-th{text-align:left;padding:6px 10px;font-family:var(--fh);font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,.35);border-bottom:1px solid rgba(255,255,255,.07)}
+.top10-th.r{text-align:right}
+.top10-tr{border-bottom:1px solid rgba(255,255,255,.04)}
+.top10-rank{padding:7px 10px;font-family:var(--fh);font-weight:800}
+.top10-td{padding:7px 10px}
+body.light .top10-th{color:rgba(0,0,0,.45);border-bottom-color:rgba(0,0,0,.1)}
+body.light .top10-tr{border-bottom-color:rgba(0,0,0,.06)}
 body.light .chips .chip{border-color:rgba(0,0,0,.14);color:rgba(0,0,0,.5)}
 body.light .chips .chip:hover{border-color:rgba(0,0,0,.3);color:#0D1A33}
 body.light .chips .chip.on{background:#DDE6F5;border-color:var(--g500);color:#0D1A33}
@@ -639,7 +646,7 @@ function buildDashData(anpRows, negRows, brutasRows) {
     var k=(a.cidade||'').toUpperCase()+'|'+(a.uf||'').toUpperCase();
     var neg = latestNeg[k] ? Number(latestNeg[k].preco_negociado) : null;
     var prat = latestPrat[k] ? Number(latestPrat[k].preco_praticado) : null;
-    var ef = neg!=null ? neg : prat;
+    var ef = prat; // sempre o praticado — precisamos monitorar o que foi cobrado, não o negociado
     var ref=a.preco_ref;
     var comp = (ef!=null && ref!=null) ? parseFloat((ef-ref).toFixed(3)) : null;
     var st='🟡';
@@ -1275,23 +1282,22 @@ function renderTop10(){
   var piores = DASH_DATA.filter(function(d){ return d.ef!=null && d.comp!=null; })
     .slice().sort(function(a,b){ return b.comp-a.comp; }).slice(0,10);
   if(!piores.length){ wrap.innerHTML=''; return; }
-  var thStyle='text-align:left;padding:6px 10px;font-family:var(--fh);font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,.35);border-bottom:1px solid rgba(255,255,255,.07)';
   wrap.innerHTML='<div class="card" style="padding:14px 18px;margin-bottom:16px">'
     +'<div class="card-title" style="margin-bottom:10px">🔴 Top 10 — Cidades com maior custo vs ANP</div>'
     +'<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr>'
-    +'<th style="'+thStyle+'">#</th>'
-    +'<th style="'+thStyle+'">Cidade</th>'
-    +'<th style="'+thStyle+';text-align:right">eFleet</th>'
-    +'<th style="'+thStyle+';text-align:right">Ref. ANP</th>'
-    +'<th style="'+thStyle+';text-align:right">Diferença</th>'
+    +'<th class="top10-th">#</th>'
+    +'<th class="top10-th">Cidade</th>'
+    +'<th class="top10-th r">eFleet</th>'
+    +'<th class="top10-th r">Ref. ANP</th>'
+    +'<th class="top10-th r">Diferença</th>'
     +'</tr></thead><tbody>'
     +piores.map(function(d,i){
-      return '<tr style="border-bottom:1px solid rgba(255,255,255,.04)">'
-        +'<td style="padding:7px 10px;font-family:var(--fh);font-weight:800;color:'+(i<3?'#F87171':'rgba(255,255,255,.4)')+'">'+('0'+(i+1)).slice(-2)+'</td>'
-        +'<td style="padding:7px 10px"><span class="city">'+d.cidade+'</span> <span class="uf-tag">'+d.uf+'</span></td>'
-        +'<td style="padding:7px 10px;text-align:right;font-family:var(--fm);font-size:11px">'+R(d.ef)+'</td>'
-        +'<td style="padding:7px 10px;text-align:right;font-family:var(--fm);font-size:11px">'+R(d.anp_cid||d.anp_uf)+'</td>'
-        +'<td style="padding:7px 10px;text-align:right">'+RD(d.comp)+'</td>'
+      return '<tr class="top10-tr">'
+        +'<td class="top10-rank" style="color:'+(i<3?'#F87171':'rgba(128,128,128,.5)')+'">'+('0'+(i+1)).slice(-2)+'</td>'
+        +'<td class="top10-td"><span class="city">'+d.cidade+'</span> <span class="uf-tag">'+d.uf+'</span></td>'
+        +'<td class="top10-td" style="text-align:right;font-family:var(--fm);font-size:11px">'+R(d.ef)+'</td>'
+        +'<td class="top10-td" style="text-align:right;font-family:var(--fm);font-size:11px">'+R(d.anp_cid||d.anp_uf)+'</td>'
+        +'<td class="top10-td" style="text-align:right">'+RD(d.comp)+'</td>'
         +'</tr>';
     }).join('')
     +'</tbody></table></div>';
