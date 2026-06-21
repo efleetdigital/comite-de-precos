@@ -418,10 +418,10 @@ body.light .logout-btn:hover{color:#EF4444}
     <div class="card-title" id="histTitle">Evolução diária de cidades por status</div>
     <div class="chips" id="histFilters" style="margin:10px 0 14px;flex-wrap:wrap;gap:6px">
       <div class="chip" onclick="filterHist('7d',this)">7 dias</div>
-      <div class="chip on" onclick="filterHist('30d',this)">30 dias</div>
+      <div class="chip" onclick="filterHist('30d',this)">30 dias</div>
       <div class="chip" onclick="filterHist('m_atual',this)">Mês atual</div>
       <div class="chip" onclick="filterHist('m_ant',this)">Mês passado</div>
-      <div class="chip" onclick="filterHist('tudo',this)">Tudo</div>
+      <div class="chip on" onclick="filterHist('tudo',this)">Tudo</div>
       <div class="chip" onclick="filterHist('custom',this)">Personalizado</div>
     </div>
     <div id="histCustomRange" style="display:none;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">
@@ -1269,7 +1269,7 @@ function renderTop10(){
 }
 
 // ── HISTÓRICO ──
-var histInited=false, histChart=null, histRange='30d', histCustomFrom='', histCustomTo='';
+var histInited=false, histChart=null, histRange='tudo', histCustomFrom='', histCustomTo='';
 
 function getHistFiltered(){
   var today=new Date();
@@ -1359,7 +1359,7 @@ function renderHist(){
       ]
     },
     options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
-      plugins:{legend:{display:true,labels:{color:'rgba(255,255,255,.7)',font:{family:'Montserrat',size:12},padding:16,usePointStyle:true,pointStyle:'circle'}}},
+      plugins:{legend:{display:true,labels:{color:'rgba(255,255,255,.75)',font:{size:12},padding:18,boxWidth:14,boxHeight:3}}},
       scales:{
         x:{ticks:{color:'rgba(255,255,255,.35)',font:{size:10},maxTicksLimit:12},grid:{color:'rgba(255,255,255,.05)'}},
         y:{ticks:{color:'rgba(255,255,255,.35)',font:{size:10}},grid:{color:'rgba(255,255,255,.05)'}}
