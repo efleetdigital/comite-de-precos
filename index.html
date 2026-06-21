@@ -849,9 +849,8 @@ function initDash(){
   var ufs=[...new Set(DASH_DATA.map(function(d){ return d.uf; }))].sort();
   var sel=document.getElementById('ufSelD');
   ufs.forEach(function(u){ var o=document.createElement('option'); o.value=u; o.textContent=u; sel.appendChild(o); });
-  // Cidades com negociação ativa (EM ANDAMENTO ou AGUARDANDO RETORNO) — já estão sendo tratadas
-  var emAndamento = new Set(COMITE_DATA
-    .filter(function(c){ return c.st==='EM ANDAMENTO'||c.st==='AGUARDANDO RETORNO'; })
+  // Cidades já tratadas (qualquer negociação registrada: ativa, concluída ou negada)
+  var comCidade = new Set(COMITE_DATA
     .map(function(c){ return (c.cidade||'').toUpperCase()+'|'+(c.uf||'').toUpperCase(); }));
   // KPIs: todas as cidades com preço praticado
   var ativo = DASH_DATA.filter(function(d){ return d.ef!=null; });
@@ -859,11 +858,11 @@ function initDash(){
   var y=ativo.filter(function(d){ return d.st==='🟡'; }).length;
   var g=ativo.filter(function(d){ return d.st==='🟢'; }).length;
   var b=ativo.filter(function(d){ return d.st==='🔵'; }).length;
-  // Badge: só as 🔴 sem negociação em andamento
+  // Badge: 🔴 que nunca tiveram nenhuma negociação registrada
   var semTratamento = ativo.filter(function(d){
-    return d.st==='🔴' && !emAndamento.has((d.cidade||'').toUpperCase()+'|'+(d.uf||'').toUpperCase());
+    return d.st==='🔴' && !comCidade.has((d.cidade||'').toUpperCase()+'|'+(d.uf||'').toUpperCase());
   }).length;
-  document.getElementById('critBadge').textContent='🔴 '+semTratamento+' sem tratativa';
+  document.getElementById('critBadge').textContent= semTratamento>0 ? '🔴 '+semTratamento+' sem tratativa' : '';
   document.getElementById('kpiDash').innerHTML=
     '<div class="kpi r"><div class="kpi-lbl">🔴 Negociar Agora</div><div class="kpi-val r">'+r+'</div><div class="kpi-sub">cidades acima do ANP</div></div>'+
     '<div class="kpi y"><div class="kpi-lbl">🟡 Atenção</div><div class="kpi-val y">'+y+'</div><div class="kpi-sub">margem 0–3%</div></div>'+
