@@ -391,12 +391,14 @@ body.light .logout-btn:hover{color:#EF4444}
   <div class="rcnt" id="rcntC"></div>
   <div class="tbl-wrap"><table><thead><tr>
     <th onclick="sortC('posto')" style="min-width:180px">Posto · Cidade ↕</th>
-    <th onclick="sortC('cliente')" style="min-width:130px">Cliente ↕</th>
-    <th style="min-width:130px">Praticado / ANP</th>
-    <th style="min-width:110px">Negociado · Econ.</th>
-    <th style="min-width:120px">Status</th>
-    <th style="min-width:110px">Status Cidade</th>
-    <th style="width:90px"></th>
+    <th onclick="sortC('cliente')" style="min-width:120px">Cliente ↕</th>
+    <th onclick="sortC('prat')" style="min-width:100px;text-align:right">Praticado ↕</th>
+    <th style="min-width:100px;text-align:right">Ref. ANP</th>
+    <th onclick="sortC('comp')" style="min-width:90px;text-align:right">Diferença ↕</th>
+    <th onclick="sortC('neg')" style="min-width:100px;text-align:right">Negociado ↕</th>
+    <th onclick="sortC('eco')" style="min-width:90px;text-align:right">Economia ↕</th>
+    <th style="min-width:110px">Status</th>
+    <th style="width:70px"></th>
   </tr></thead><tbody id="bodyC"></tbody></table></div>
 </div>
 
@@ -951,20 +953,15 @@ function renderComite(){
         '<div class="tr-name">'+c.posto+obsIcon+'</div>'+
         '<div class="tr-sub">'+c.cidade+' / '+c.uf+
           ' · <span class="mono" style="font-size:10px;opacity:.5">'+c.data+'</span>'+
-          ' · <span style="font-family:var(--fh);font-size:10px;color:var(--teal);opacity:.7">'+c.efl+'</span>'+
         '</div>'+
       '</td>'+
       '<td style="font-weight:600;font-size:12px">'+c.cliente+'</td>'+
-      '<td>'+
-        '<span class="mono">'+R(c.prat)+'</span>'+
-        '<div style="font-size:10px;color:rgba(255,255,255,.4);margin-top:2px">ANP '+R(c.anp)+' '+RD(c.comp)+'</div>'+
-      '</td>'+
-      '<td>'+
-        (c.neg?'<span class="mono" style="color:var(--g400);font-weight:700">'+R(c.neg)+'</span>':'<span style="opacity:.3">—</span>')+
-        (c.eco?'<div style="font-size:10px;margin-top:2px">'+RD(c.eco)+'</div>':'')
-      +'</td>'+
+      '<td style="text-align:right"><span class="mono">'+R(c.prat)+'</span></td>'+
+      '<td style="text-align:right"><span class="mono" style="opacity:.6">'+R(c.anp)+'</span></td>'+
+      '<td style="text-align:right">'+RD(c.comp)+'</td>'+
+      '<td style="text-align:right">'+(c.neg?'<span class="mono" style="color:var(--g400);font-weight:700">'+R(c.neg)+'</span>':'<span style="opacity:.25">—</span>')+'</td>'+
+      '<td style="text-align:right">'+(c.eco?RD(c.eco):'<span style="opacity:.25">—</span>')+'</td>'+
       '<td>'+stComite(eff_st)+editedMark+comment+'</td>'+
-      '<td>'+stPill(getCityStatus(c.cidade,c.uf))+'</td>'+
       '<td style="white-space:nowrap"><button class="row-edit-btn" onclick="openEdit('+i+')" title="Editar">✏️</button> <button class="fila-add-btn" onclick="addToFila('+i+')" title="Adicionar à Fila">➕</button></td>'+
       '</tr>';
   }).join('');
