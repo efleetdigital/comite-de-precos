@@ -327,6 +327,7 @@ body.light .logout-btn:hover{color:#EF4444}
     <span class="htitle" style="margin-left:12px">Comitê de Preços</span>
   </div>
   <div style="display:flex;align-items:center;gap:10px">
+    <span id="headerUpdated" style="font-family:var(--fh);font-size:11px;color:rgba(255,255,255,.35);display:none">atualizado em <b style="color:rgba(255,255,255,.6)" id="headerUpdatedDate"></b></span>
     <button id="themeToggle" class="theme-btn" onclick="toggleTheme()" title="Alternar tema claro/escuro">🌙</button>
     <span class="hbadge" id="critBadge">—</span>
   <div id="userChipWrap" class="user-chip" style="display:none"><span id="userChipName"></span><button class="logout-btn" onclick="doLogout()" title="Sair">✕</button></div>
@@ -878,6 +879,9 @@ function initDash(){
   var efStr = maxData ? maxData.substring(8,10)+'/'+maxData.substring(5,7) : '—';
   var updEl = document.getElementById('dashUpdated');
   if(updEl) updEl.innerHTML='Preços eFleet: <b>'+efStr+'</b> &nbsp;·&nbsp; Ref. ANP: semana <b>'+anpSem+'</b>';
+  var hUpd = document.getElementById('headerUpdated');
+  var hDate = document.getElementById('headerUpdatedDate');
+  if(hUpd && hDate && efStr!=='—'){ hDate.textContent=efStr; hUpd.style.display='inline'; }
 
   renderDash();
 }
