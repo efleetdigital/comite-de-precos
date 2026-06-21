@@ -393,10 +393,10 @@ body.light .logout-btn:hover{color:#EF4444}
     <th onclick="sortC('posto')" style="min-width:180px">Posto · Cidade ↕</th>
     <th onclick="sortC('cliente')" style="min-width:120px">Cliente ↕</th>
     <th onclick="sortC('prat')" style="min-width:100px;text-align:right">Praticado ↕</th>
-    <th style="min-width:100px;text-align:right">Ref. ANP</th>
-    <th onclick="sortC('comp')" style="min-width:90px;text-align:right">Diferença ↕</th>
     <th onclick="sortC('neg')" style="min-width:100px;text-align:right">Negociado ↕</th>
-    <th onclick="sortC('eco')" style="min-width:90px;text-align:right">Economia ↕</th>
+    <th style="min-width:100px;text-align:right">Prat. vs Neg.</th>
+    <th style="min-width:100px;text-align:right">Ref. ANP</th>
+    <th onclick="sortC('comp')" style="min-width:90px;text-align:right">Prat. vs ANP ↕</th>
     <th style="min-width:110px">Status</th>
     <th style="width:70px"></th>
   </tr></thead><tbody id="bodyC"></tbody></table></div>
@@ -957,10 +957,10 @@ function renderComite(){
       '</td>'+
       '<td style="font-weight:600;font-size:12px">'+c.cliente+'</td>'+
       '<td style="text-align:right"><span class="mono">'+R(c.prat)+'</span></td>'+
+      '<td style="text-align:right">'+(c.neg?'<span class="mono" style="color:var(--g400);font-weight:700">'+R(c.neg)+'</span>':'<span style="opacity:.25">—</span>')+'</td>'+
+      '<td style="text-align:right">'+(c.prat!=null&&c.neg!=null?RD(parseFloat((c.prat-c.neg).toFixed(3))):'<span style="opacity:.25">—</span>')+'</td>'+
       '<td style="text-align:right"><span class="mono" style="opacity:.6">'+R(c.anp)+'</span></td>'+
       '<td style="text-align:right">'+RD(c.comp)+'</td>'+
-      '<td style="text-align:right">'+(c.neg?'<span class="mono" style="color:var(--g400);font-weight:700">'+R(c.neg)+'</span>':'<span style="opacity:.25">—</span>')+'</td>'+
-      '<td style="text-align:right">'+(c.eco?RD(c.eco):'<span style="opacity:.25">—</span>')+'</td>'+
       '<td>'+stComite(eff_st)+editedMark+comment+'</td>'+
       '<td style="white-space:nowrap"><button class="row-edit-btn" onclick="openEdit('+i+')" title="Editar">✏️</button> <button class="fila-add-btn" onclick="addToFila('+i+')" title="Adicionar à Fila">➕</button></td>'+
       '</tr>';
