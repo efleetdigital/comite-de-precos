@@ -1391,8 +1391,8 @@ function updateChartTheme(){
   histChart.update();
 }
 function renderHist(){
-  if(histInited){ _applyHistFilter(); return; } histInited=true;
   renderTop10();
+  if(histInited){ _applyHistFilter(); return; } histInited=true;
   var f=getHistFiltered();
   histChart=new Chart(document.getElementById('histChart'),{
     type:'line',
