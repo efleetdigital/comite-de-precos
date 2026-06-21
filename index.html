@@ -224,6 +224,15 @@ body.light .srch{background:#fff;border-color:rgba(0,0,0,.14);color:#0D1A33}
 body.light .srch::placeholder{color:rgba(0,0,0,.3)}
 body.light .sel{background:#fff;border-color:rgba(0,0,0,.14);color:#0D1A33}
 body.light .sel option{background:#fff;color:#0D1A33}
+.hist-item{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:12px 16px;margin-bottom:6px;display:flex;gap:12px;align-items:center}
+.hist-item-name{font-size:12px;font-weight:700;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hist-item-sub{font-size:11px;color:rgba(255,255,255,.4);margin-top:2px}
+.hist-item-date{font-size:11px;color:rgba(255,255,255,.28);white-space:nowrap;font-family:var(--fh)}
+.hist-badge{font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;white-space:nowrap;font-family:var(--fh)}
+body.light .hist-item{background:#fff;border-color:rgba(0,0,0,.08);box-shadow:0 1px 3px rgba(0,0,0,.04)}
+body.light .hist-item-name{color:#0D1A33}
+body.light .hist-item-sub{color:rgba(0,0,0,.45)}
+body.light .hist-item-date{color:rgba(0,0,0,.3)}
 body.light .chips .chip{border-color:rgba(0,0,0,.14);color:rgba(0,0,0,.5)}
 body.light .chips .chip:hover{border-color:rgba(0,0,0,.3);color:#0D1A33}
 body.light .chips .chip.on{background:#DDE6F5;border-color:var(--g500);color:#0D1A33}
@@ -1386,10 +1395,10 @@ function renderHist(){
     data:{
       labels:f.labels,
       datasets:[
-        {label:'🔴 Negociar',data:f.V,borderColor:'#F87171',backgroundColor:'rgba(248,113,113,.08)',tension:.3,fill:true,pointRadius:0,borderWidth:2,spanGaps:true},
-        {label:'🟡 Atenção',data:f.A,borderColor:'#FCD34D',backgroundColor:'rgba(252,211,77,.08)',tension:.3,fill:true,pointRadius:0,borderWidth:2,spanGaps:true},
-        {label:'🟢 Bom',data:f.G,borderColor:'#A4C557',backgroundColor:'rgba(164,197,87,.08)',tension:.3,fill:true,pointRadius:0,borderWidth:2,spanGaps:true},
-        {label:'🔵 Excelente',data:f.B,borderColor:'#60A5FA',backgroundColor:'rgba(96,165,250,.08)',tension:.3,fill:true,pointRadius:0,borderWidth:2,spanGaps:true}
+        {label:'Negociar',data:f.V,borderColor:'#F87171',backgroundColor:'rgba(248,113,113,.08)',tension:.3,fill:true,pointRadius:0,borderWidth:2,spanGaps:true},
+        {label:'Atenção',data:f.A,borderColor:'#FCD34D',backgroundColor:'rgba(252,211,77,.08)',tension:.3,fill:true,pointRadius:0,borderWidth:2,spanGaps:true},
+        {label:'Bom',data:f.G,borderColor:'#A4C557',backgroundColor:'rgba(164,197,87,.08)',tension:.3,fill:true,pointRadius:0,borderWidth:2,spanGaps:true},
+        {label:'Excelente',data:f.B,borderColor:'#60A5FA',backgroundColor:'rgba(96,165,250,.08)',tension:.3,fill:true,pointRadius:0,borderWidth:2,spanGaps:true}
       ]
     },
     options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
@@ -1584,16 +1593,18 @@ function renderFilaHist(){
   grid.innerHTML=items.map(function(c){
     var done=c.st==='CONCLUIDO';
     var stColor=done?'#A4C557':'#94A3B8';
-    var stBg=done?'rgba(164,197,87,.1)':'rgba(148,163,184,.1)';
+    var stBg=done?'rgba(164,197,87,.12)':'rgba(148,163,184,.12)';
     var stLabel=done?'✓ Concluído':'✗ Negado';
     var dateStr=c.data?String(c.data).substring(0,10).split('-').reverse().join('/'):'—';
-    return '<div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:10px 14px;margin-bottom:6px;display:flex;gap:10px;align-items:center">'
-      +'<span style="font-size:10px;font-weight:700;color:'+stColor+';background:'+stBg+';padding:3px 8px;border-radius:20px;white-space:nowrap;font-family:var(--fh)">'+stLabel+'</span>'
+    var comp=c.comp!=null?('<span style="color:'+(c.comp>0?'#F87171':'#A4C557')+';font-weight:700">'+(c.comp>0?'+':'')+c.comp.toFixed(3)+'</span>'):'';
+    return '<div class="hist-item">'
+      +'<span class="hist-badge" style="color:'+stColor+';background:'+stBg+'">'+stLabel+'</span>'
       +'<div style="flex:1;min-width:0">'
-      +'<div style="font-size:12px;font-weight:700;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+c.posto+'</div>'
-      +'<div style="font-size:11px;color:rgba(255,255,255,.38)">'+c.cidade+' · '+c.cliente+'</div>'
+      +'<div class="hist-item-name">'+(c.posto||'—')+'</div>'
+      +'<div class="hist-item-sub">'+(c.cidade||'—')+' · '+(c.cliente||'—')+'</div>'
       +'</div>'
-      +'<div style="font-size:11px;color:rgba(255,255,255,.28);white-space:nowrap">'+dateStr+'</div>'
+      +(comp?'<div style="text-align:right"><div style="font-size:11px;color:rgba(128,128,128,.6);font-family:var(--fh)">dif. ANP</div><div style="font-size:12px">'+comp+'</div></div>':'')
+      +'<div class="hist-item-date">'+dateStr+'</div>'
       +'</div>';
   }).join('');
 }
