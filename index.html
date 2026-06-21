@@ -465,10 +465,10 @@ body.light .logout-btn:hover{color:#EF4444}
   <div class="fila-toolbar">
     <input class="srch" id="srchF" placeholder="🔍  Buscar posto, cliente, cidade…" oninput="renderFila()">
     <div class="chips">
-      <div class="chip cy on" onclick="filaSetFilter('aberto',this)">📋 Em aberto</div>
-      <div class="chip cr" onclick="filaSetFilter('urgente',this)">🔴 Urgente</div>
-      <div class="chip cb" onclick="filaSetFilter('aguard',this)">⏳ Aguardando</div>
-      <div class="chip" onclick="filaSetFilter('todos',this)">Todos</div>
+      <div class="chip cy on" onclick="filaSetFilter('aberto',this)">Em aberto</div>
+      <div class="chip cr" onclick="filaSetFilter('negociar',this)">A negociar</div>
+      <div class="chip cb" onclick="filaSetFilter('acompanhar',this)">Acompanhar</div>
+      <div class="chip cg" onclick="filaSetFilter('concluidos',this)">Concluídos</div>
       <div class="chip" id="filaHistBtn" onclick="toggleFilaHist(this)">📋 Histórico</div>
     </div>
   </div>
@@ -1687,12 +1687,17 @@ function renderFila() {
   var doneItems   = allItems.filter(function(x){ return x.st==='CONCLUIDO'||x.st==='NEGADO'; });
   var activeItems = allItems.filter(function(x){ return x.st!=='CONCLUIDO'&&x.st!=='NEGADO'; });
 
-  // filter active by tab
-  var filteredActive = activeItems.filter(function(x){
-    if(filaFilter==='urgente') return x.pri>=20;
-    if(filaFilter==='aguard')  return x.st==='AGUARDANDO RETORNO';
-    return true; // aberto + todos
-  });
+  // filter by tab
+  var filteredActive, showDone=false;
+  if(filaFilter==='concluidos'){
+    filteredActive=[]; showDone=true;
+  } else {
+    filteredActive = activeItems.filter(function(x){
+      if(filaFilter==='negociar')    return x.st==='EM ANDAMENTO';
+      if(filaFilter==='acompanhar')  return x.st==='AGUARDANDO RETORNO';
+      return true; // aberto
+    });
+  }
 
   // search filter
   function matchQ(x){
@@ -1725,8 +1730,11 @@ function renderFila() {
   var badge = document.getElementById('filaTabBadge');
   if(badge) badge.textContent = total>0 ? total : '—';
 
-  if(cnt) cnt.innerHTML = filteredActive.length+' item'+(filteredActive.length!==1?'s':'')+' em aberto'
-    +(doneItems.length?' · <button onclick="filaToggleDone()" style="background:none;border:none;color:rgba(255,255,255,.35);cursor:pointer;font-family:var(--fh);font-weight:700;font-size:11px;padding:0;text-decoration:underline;">'+(filaShowDone?'Ocultar':'Mostrar')+' '+doneItems.length+' registrado'+(doneItems.length!==1?'s':'')+'</button>':'');
+  if(cnt){
+    if(showDone) cnt.innerHTML = doneItems.length+' registro'+(doneItems.length!==1?'s':'');
+    else cnt.innerHTML = filteredActive.length+' item'+(filteredActive.length!==1?'s':'')+' em aberto'
+      +(doneItems.length&&!showDone?' · <button onclick="filaToggleDone()" style="background:none;border:none;color:rgba(255,255,255,.35);cursor:pointer;font-family:var(--fh);font-weight:700;font-size:11px;padding:0;text-decoration:underline;">'+(filaShowDone?'Ocultar':'Mostrar')+' '+doneItems.length+' concluído'+(doneItems.length!==1?'s':'')+'</button>':'');
+  }
 
   if(!filteredActive.length && !doneItems.length){
     var anpAviso = ANP_META.atualizado === false
@@ -1780,16 +1788,19 @@ function renderFila() {
     return html;
   }
 
-  var out = filteredActive.map(buildCard).join('');
-
-  // Registros section (concluídos / negados) — ocultos por padrão
-  if(doneItems.length && filaShowDone){
-    out += '<div style="margin:24px 0 10px;display:flex;align-items:center;gap:10px">'
-         + '<div style="flex:1;height:1px;background:rgba(255,255,255,.08)"></div>'
-         + '<span style="font-family:var(--fh);font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.25)">Registros ('+doneItems.length+')</span>'
-         + '<div style="flex:1;height:1px;background:rgba(255,255,255,.08)"></div>'
-         + '</div>';
-    out += doneItems.map(buildCard).join('');
+  var out;
+  if(showDone){
+    out = doneItems.map(buildCard).join('') || '<div style="text-align:center;padding:32px;color:rgba(255,255,255,.3);font-size:13px">Nenhum registro concluído na fila.</div>';
+  } else {
+    out = filteredActive.map(buildCard).join('');
+    if(doneItems.length && filaShowDone){
+      out += '<div style="margin:24px 0 10px;display:flex;align-items:center;gap:10px">'
+           + '<div style="flex:1;height:1px;background:rgba(255,255,255,.08)"></div>'
+           + '<span style="font-family:var(--fh);font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.25)">Concluídos ('+doneItems.length+')</span>'
+           + '<div style="flex:1;height:1px;background:rgba(255,255,255,.08)"></div>'
+           + '</div>';
+      out += doneItems.map(buildCard).join('');
+    }
   }
 
   grid.innerHTML = out;
@@ -1839,8 +1850,8 @@ function updateTabBadges() {
   var elC = document.getElementById('badgeCidade');
   if(elC){ elC.textContent = nCidade||''; elC.style.display = nCidade?'':'none'; }
 
-  // Por Posto: postos 🔴 em COMITE_DATA ativos (EM ANDAMENTO / em_fila)
-  var nPosto = COMITE_DATA.filter(function(c){ return c.comp!=null && c.comp>0.10; }).length;
+  // Por Posto: itens na fila ainda em aberto
+  var nPosto = COMITE_DATA.filter(function(c){ return c.em_fila && c.st!=='CONCLUIDO' && c.st!=='NEGADO'; }).length;
   var elP = document.getElementById('badgePosto');
   if(elP){ elP.textContent = nPosto||''; elP.style.display = nPosto?'':'none'; }
 
