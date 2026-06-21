@@ -416,6 +416,20 @@ body.light .logout-btn:hover{color:#EF4444}
   <div id="top10Wrap" style="margin-bottom:16px"></div>
   <div class="card">
     <div class="card-title" id="histTitle">Evolução diária de cidades por status</div>
+    <div class="chips" id="histFilters" style="margin:10px 0 14px;flex-wrap:wrap;gap:6px">
+      <div class="chip" onclick="filterHist('7d',this)">7 dias</div>
+      <div class="chip on" onclick="filterHist('30d',this)">30 dias</div>
+      <div class="chip" onclick="filterHist('m_atual',this)">Mês atual</div>
+      <div class="chip" onclick="filterHist('m_ant',this)">Mês passado</div>
+      <div class="chip" onclick="filterHist('tudo',this)">Tudo</div>
+      <div class="chip" onclick="filterHist('custom',this)">Personalizado</div>
+    </div>
+    <div id="histCustomRange" style="display:none;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+      <input type="date" id="histFromDate" style="background:#1e293b;border:1px solid #334155;color:#e2e8f0;border-radius:6px;padding:5px 8px;font-size:12px;font-family:Montserrat">
+      <span style="color:#64748b;font-size:12px">até</span>
+      <input type="date" id="histToDate" style="background:#1e293b;border:1px solid #334155;color:#e2e8f0;border-radius:6px;padding:5px 8px;font-size:12px;font-family:Montserrat">
+      <button onclick="applyCustomHist()" style="background:#3b82f6;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:12px;font-family:Montserrat;cursor:pointer">Aplicar</button>
+    </div>
     <div class="chart-box"><canvas id="histChart"></canvas></div>
   </div>
 </div>
@@ -569,7 +583,7 @@ document.addEventListener('keydown', function(e) {
 const SB_URL='https://qeseyfuilmxghukuqumi.supabase.co';
 const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFlc2V5ZnVpbG14Z2h1a3VxdW1pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxODc0MjksImV4cCI6MjA5MTc2MzQyOX0.nH77_Lzt-fM70FyiESjQrUVmkOtB43vqahjq52KJ9W8';
 let DASH_DATA=[], COMITE_DATA=[], TRANS_DATA=[], CLIENTES_DATA=[], BRUTAS_DATA=[];
-let HIST_LABELS=[], HIST_V=[], HIST_A=[], HIST_G=[], HIST_B=[];
+let HIST_LABELS=[], HIST_V=[], HIST_A=[], HIST_G=[], HIST_B=[], HIST_DATES=[];
 let ANP_META={semana_ref:null, atualizado:false};
 
 async function sbFetch(table, params) {
@@ -720,6 +734,7 @@ async function loadSupabase() {
     TRANS_DATA  = BRUTAS_DATA;
     CLIENTES_DATA = buildClientesData(COMITE_DATA, brutasRows);
     HIST_LABELS = histRows.map(function(h){return h.label;});
+    HIST_DATES  = histRows.map(function(h){return h.data ? h.data.substring(0,10) : '';});
     HIST_V = histRows.map(function(h){return h.total;});
     HIST_A = histRows.map(function(h){return h.a_negociar;});
     HIST_G = histRows.map(function(h){return h.bom;});
@@ -1254,43 +1269,104 @@ function renderTop10(){
 }
 
 // ── HISTÓRICO ──
-var histInited=false;
-function renderHist(){
-  if(histInited) return; histInited=true;
-  renderTop10();
-  if(HIST_LABELS && HIST_LABELS.length){
-    var first=HIST_LABELS[0], last=HIST_LABELS[HIST_LABELS.length-1];
-    var titleEl=document.getElementById('histTitle');
-    if(titleEl) titleEl.textContent='Evolução diária de cidades por status — '+first+' a '+last;
+var histInited=false, histChart=null, histRange='30d', histCustomFrom='', histCustomTo='';
+
+function getHistFiltered(){
+  var today=new Date();
+  var y=today.getFullYear(), mo=today.getMonth()+1;
+  var filtLabels=[], filtV=[], filtA=[], filtG=[], filtB=[];
+  for(var i=0;i<HIST_DATES.length;i++){
+    var d=HIST_DATES[i]; var inc=false;
+    if(histRange==='7d'){
+      var cut=new Date(today); cut.setDate(cut.getDate()-7);
+      inc=d>=cut.toISOString().substring(0,10);
+    } else if(histRange==='30d'){
+      var cut=new Date(today); cut.setDate(cut.getDate()-30);
+      inc=d>=cut.toISOString().substring(0,10);
+    } else if(histRange==='m_atual'){
+      inc=d.substring(0,7)===(y+'-'+String(mo).padStart(2,'0'));
+    } else if(histRange==='m_ant'){
+      var py=y, pm=mo-1; if(pm===0){pm=12;py--;}
+      inc=d.substring(0,7)===(py+'-'+String(pm).padStart(2,'0'));
+    } else if(histRange==='custom'){
+      inc=(!histCustomFrom||d>=histCustomFrom)&&(!histCustomTo||d<=histCustomTo);
+    } else { inc=true; }
+    if(inc){ filtLabels.push(HIST_LABELS[i]); filtV.push(HIST_V[i]); filtA.push(HIST_A[i]); filtG.push(HIST_G[i]); filtB.push(HIST_B[i]); }
   }
-  var lastV=HIST_V.filter(function(v){ return v!=null; }).slice(-1)[0]||0;
-  var lastA=HIST_A.filter(function(v){ return v!=null; }).slice(-1)[0]||0;
-  var lastG=HIST_G.filter(function(v){ return v!=null; }).slice(-1)[0]||0;
-  var lastB=HIST_B.filter(function(v){ return v!=null; }).slice(-1)[0]||0;
+  return {labels:filtLabels,V:filtV,A:filtA,G:filtG,B:filtB};
+}
+
+function filterHist(range, el){
+  histRange=range;
+  // toggle chip UI
+  var customDiv=document.getElementById('histCustomRange');
+  if(el){
+    document.querySelectorAll('#histFilters .chip').forEach(function(c){c.classList.remove('on');});
+    el.classList.add('on');
+  }
+  if(customDiv) customDiv.style.display=(range==='custom'?'flex':'none');
+  if(range==='custom') return; // wait for Aplicar
+  _applyHistFilter();
+}
+
+function applyCustomHist(){
+  histCustomFrom=document.getElementById('histFromDate').value||'';
+  histCustomTo=document.getElementById('histToDate').value||'';
+  _applyHistFilter();
+}
+
+function _applyHistFilter(){
+  var f=getHistFiltered();
+  // update title
+  var titleEl=document.getElementById('histTitle');
+  if(titleEl && f.labels.length){
+    titleEl.textContent='Evolução diária de cidades por status — '+f.labels[0]+' a '+f.labels[f.labels.length-1];
+  }
+  // update KPIs (last value in filtered range)
+  var lastV=f.V.filter(function(v){return v!=null;}).slice(-1)[0]||0;
+  var lastA=f.A.filter(function(v){return v!=null;}).slice(-1)[0]||0;
+  var lastG=f.G.filter(function(v){return v!=null;}).slice(-1)[0]||0;
+  var lastB=f.B.filter(function(v){return v!=null;}).slice(-1)[0]||0;
   document.getElementById('kpiHist').innerHTML=
-    '<div class="kpi r"><div class="kpi-lbl">🔴 Último reg.</div><div class="kpi-val r">'+lastV+'</div><div class="kpi-sub">a negociar</div></div>'+
-    '<div class="kpi y"><div class="kpi-lbl">🟡 Último reg.</div><div class="kpi-val y">'+lastA+'</div><div class="kpi-sub">atenção</div></div>'+
-    '<div class="kpi g"><div class="kpi-lbl">🟢 Último reg.</div><div class="kpi-val g">'+lastG+'</div><div class="kpi-sub">bom</div></div>'+
-    '<div class="kpi b"><div class="kpi-lbl">🔵 Último reg.</div><div class="kpi-val b">'+lastB+'</div><div class="kpi-sub">cidades azuis</div></div>';
-  new Chart(document.getElementById('histChart'),{
+    '<div class="kpi r"><div class="kpi-lbl">🔴 Negociar</div><div class="kpi-val r">'+lastV+'</div><div class="kpi-sub">cidades · último dia</div></div>'+
+    '<div class="kpi y"><div class="kpi-lbl">🟡 Atenção</div><div class="kpi-val y">'+lastA+'</div><div class="kpi-sub">cidades · último dia</div></div>'+
+    '<div class="kpi g"><div class="kpi-lbl">🟢 Bom</div><div class="kpi-val g">'+lastG+'</div><div class="kpi-sub">cidades · último dia</div></div>'+
+    '<div class="kpi b"><div class="kpi-lbl">🔵 Excelente</div><div class="kpi-val b">'+lastB+'</div><div class="kpi-sub">cidades · último dia</div></div>';
+  // update chart
+  if(histChart){
+    histChart.data.labels=f.labels;
+    histChart.data.datasets[0].data=f.V;
+    histChart.data.datasets[1].data=f.A;
+    histChart.data.datasets[2].data=f.G;
+    histChart.data.datasets[3].data=f.B;
+    histChart.update();
+  }
+}
+
+function renderHist(){
+  if(histInited){ _applyHistFilter(); return; } histInited=true;
+  renderTop10();
+  var f=getHistFiltered();
+  histChart=new Chart(document.getElementById('histChart'),{
     type:'line',
     data:{
-      labels:HIST_LABELS,
+      labels:f.labels,
       datasets:[
-        {label:'🔴 Negociar',data:HIST_V,borderColor:'#F87171',backgroundColor:'rgba(248,113,113,.08)',tension:.3,fill:true,pointRadius:0,borderWidth:2,spanGaps:true},
-        {label:'🟡 Atenção',data:HIST_A,borderColor:'#FCD34D',backgroundColor:'rgba(252,211,77,.08)',tension:.3,fill:true,pointRadius:0,borderWidth:2,spanGaps:true},
-        {label:'🟢 Bom',data:HIST_G,borderColor:'#A4C557',backgroundColor:'rgba(164,197,87,.08)',tension:.3,fill:true,pointRadius:0,borderWidth:2,spanGaps:true},
-        {label:'🔵 Excelente',data:HIST_B,borderColor:'#60A5FA',backgroundColor:'rgba(96,165,250,.08)',tension:.3,fill:true,pointRadius:0,borderWidth:2,spanGaps:true}
+        {label:'🔴 Negociar',data:f.V,borderColor:'#F87171',backgroundColor:'rgba(248,113,113,.08)',tension:.3,fill:true,pointRadius:0,borderWidth:2,spanGaps:true},
+        {label:'🟡 Atenção',data:f.A,borderColor:'#FCD34D',backgroundColor:'rgba(252,211,77,.08)',tension:.3,fill:true,pointRadius:0,borderWidth:2,spanGaps:true},
+        {label:'🟢 Bom',data:f.G,borderColor:'#A4C557',backgroundColor:'rgba(164,197,87,.08)',tension:.3,fill:true,pointRadius:0,borderWidth:2,spanGaps:true},
+        {label:'🔵 Excelente',data:f.B,borderColor:'#60A5FA',backgroundColor:'rgba(96,165,250,.08)',tension:.3,fill:true,pointRadius:0,borderWidth:2,spanGaps:true}
       ]
     },
     options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
-      plugins:{legend:{labels:{color:'rgba(255,255,255,.6)',font:{family:'Montserrat',size:11}}}},
+      plugins:{legend:{display:true,labels:{color:'rgba(255,255,255,.7)',font:{family:'Montserrat',size:12},padding:16,usePointStyle:true,pointStyle:'circle'}}},
       scales:{
         x:{ticks:{color:'rgba(255,255,255,.35)',font:{size:10},maxTicksLimit:12},grid:{color:'rgba(255,255,255,.05)'}},
         y:{ticks:{color:'rgba(255,255,255,.35)',font:{size:10}},grid:{color:'rgba(255,255,255,.05)'}}
       }
     }
   });
+  _applyHistFilter();
 }
 
 // ── HELPERS FILA ──
