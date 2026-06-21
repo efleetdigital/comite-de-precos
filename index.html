@@ -338,10 +338,10 @@ body.light .logout-btn:hover{color:#EF4444}
 </header>
 
 <div class="tabbar">
-  <div class="tab on" onclick="goTab('dash',this)">🗺 Por Cidade <span class="tcnt">168</span></div>
-  <div class="tab" onclick="goTab('comite',this)">⛽ Por Posto <span class="tcnt">538</span></div>
+  <div class="tab on" onclick="goTab('dash',this)">🗺 Por Cidade <span class="tcnt" id="badgeCidade"></span></div>
+  <div class="tab" onclick="goTab('comite',this)">⛽ Por Posto <span class="tcnt" id="badgePosto"></span></div>
   <div class="tab" onclick="goTab('trans',this)" style="display:none">⛽ Transações <span class="tcnt">0</span></div>
-  <div class="tab" onclick="goTab('clientes',this)">🏢 Por Cliente <span class="tcnt">64</span></div>
+  <div class="tab" onclick="goTab('clientes',this)">🏢 Por Cliente <span class="tcnt" id="badgeCliente"></span></div>
   <div class="tab" onclick="goTab('hist',this)">📊 Painel</div>
   <div class="tab" onclick="goTab('fila',this)">🎯 Fila <span class="tcnt" id="filaTabBadge" style="background:rgba(239,68,68,.75)">—</span></div>
 </div>
@@ -1492,6 +1492,7 @@ async function sbCreateNegociacaoFromBruta(posto, cidade, uf, cliente, prat, anp
 async function reloadAndRender(){
   await loadSupabase();
   initDash(); initComite(); initTrans(); initClientes(); initFila();
+  updateTabBadges();
 }
 
 function addToFila(idx) {
@@ -1827,9 +1828,29 @@ function calcPri(i) {
 
 function initFila() { renderFila(); }
 
+function updateTabBadges() {
+  // Por Cidade: 🔴 com transação nos últimos 30 dias
+  var cut30 = new Date(); cut30.setDate(cut30.getDate()-30);
+  var cutStr30 = cut30.toISOString().substring(0,10);
+  var nCidade = DASH_DATA.filter(function(d){ return d.st==='🔴' && d.ef!=null && d.ultima_data && d.ultima_data>=cutStr30; }).length;
+  var elC = document.getElementById('badgeCidade');
+  if(elC){ elC.textContent = nCidade||''; elC.style.display = nCidade?'':'none'; }
+
+  // Por Posto: postos 🔴 em COMITE_DATA ativos (EM ANDAMENTO / em_fila)
+  var nPosto = COMITE_DATA.filter(function(c){ return c.comp!=null && c.comp>0.10; }).length;
+  var elP = document.getElementById('badgePosto');
+  if(elP){ elP.textContent = nPosto||''; elP.style.display = nPosto?'':'none'; }
+
+  // Por Cliente: clientes com pelo menos 1 posto 🔴
+  var nCliente = CLIENTES_DATA.filter(function(c){ return c.criticos>0; }).length;
+  var elCl = document.getElementById('badgeCliente');
+  if(elCl){ elCl.textContent = nCliente||''; elCl.style.display = nCliente?'':'none'; }
+}
+
 async function initApp() {
   await loadSupabase();
   initDash(); initComite(); initTrans(); initClientes(); initFila();
+  updateTabBadges();
 }
 
 window.addEventListener('DOMContentLoaded', async function(){
